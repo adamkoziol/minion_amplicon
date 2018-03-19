@@ -93,9 +93,19 @@
 
 <h2 id="overview">Overview</h2>
 <p>The MinION amplicon pipeline is comprised of the following steps:</p>
+<p>OPTIONAL - if a folder of unprocessed FASTQ files is provided, these steps occur prior to the rest of the pipeline:</p>
 <ul>
 <li>
-<p>A read baiting step where the FASTQ reads that have regions of similarity to the targets are extracted using bbduk.sh v37.78</p>
+<p>FASTQ files are combined into a single, compressed file</p>
+</li>
+<li>
+<p>Combined reads are trimmed using porechop v0.2.3</p>
+</li>
+<li>
+<p>Trimmed reads are sorted to put similar reads near each other with clumpify v37.78</p>
+</li>
+<li>
+<p>FASTQ reads that have regions of similarity to the targets are extracted using bbduk.sh v37.78</p>
 </li>
 <li>
 <p>Baited FASTQ files are converted to FASTA format with fastq_to_fasta v0.0.14, a script from the FASTX toolkit</p>
