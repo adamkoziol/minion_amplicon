@@ -21,7 +21,7 @@ def variables():
     v.path = os.path.join(testpath, 'testdata')
     v.targetpath = os.path.join(v.path, 'targets')
     v.targetfile = os.path.join(v.targetpath, 'genesofinterest.fasta')
-    v.fastqfile = os.path.join(v.path, 'testdata.fastq.gz')
+    v.fastq = os.path.join(v.path, 'testdata.fastq.gz')
     v.length = 50
     v.kmersize = 27
     v.hdist = 2
