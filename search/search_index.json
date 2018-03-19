@@ -1,0 +1,94 @@
+{
+    "docs": [
+        {
+            "location": "/",
+            "text": "Home\n\n\nOverview\n\n\nInstallation\n\n\nTutorial\n\n\nTests",
+            "title": "Home"
+        },
+        {
+            "location": "/installation/",
+            "text": "COWBAT Installation\n\n\nDependencies\n\n\n\n\nLinux system\n\n\nConda\n\n\nDocker\n\n\n\n\nConda method\n\n\nThe way I install conda:\n\n\nwget https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh -O miniconda.sh\nbash miniconda.sh -b -p $HOME/miniconda\nexport PATH=\"$HOME/miniconda/bin:$PATH\"\nconda config --set always_yes yes\nconda update -q conda\n\n\n\n\nThe easiest way to install the pipeline is to download the source code \nGitHub Link\n\n\ngit clone https://github.com/adamkoziol/minion_amplicon.git\ncd minion_amplicon\nexport PATH=\"/path/to/repository/minion_amplicon:$PATH\"\nconda env create -f environment.yml\nsource activate minionamplicon\n\n\n\n\nDocker method\n\n\nDocker must already be installed\n\n\nThe docker image relies on conda to install all the dependencies, so the cowbat environment must be sourced within \nthe container prior to launch. The supplied command below launches container, and immediately sources the environment, and runs the \npipeline, but it is also possible to run those commands separately from within the container. For additional details on the run\ncommand, please see \nthe tutorial\n.\n\n\ngit clone https://github.com/adamkoziol/minion_amplicon.git\ncd minion_amplicon\ndocker build -t minionamplicon:latest .\ndocker run -it --name minionamplicon --rm minionamplicon:latest /bin/bash -c \"source activate minionamplicon && minion_amplicon_pipeline.py /path/to/store/outputs -f /path/to/FASTQsequences -r /path/to/targets\"\n\n\n\n\nTesting\n\n\nUnit tests",
+            "title": "Installation"
+        },
+        {
+            "location": "/installation/#cowbat-installation",
+            "text": "",
+            "title": "COWBAT Installation"
+        },
+        {
+            "location": "/installation/#dependencies",
+            "text": "Linux system  Conda  Docker",
+            "title": "Dependencies"
+        },
+        {
+            "location": "/installation/#conda-method",
+            "text": "The way I install conda:  wget https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh -O miniconda.sh\nbash miniconda.sh -b -p $HOME/miniconda\nexport PATH=\"$HOME/miniconda/bin:$PATH\"\nconda config --set always_yes yes\nconda update -q conda  The easiest way to install the pipeline is to download the source code  GitHub Link  git clone https://github.com/adamkoziol/minion_amplicon.git\ncd minion_amplicon\nexport PATH=\"/path/to/repository/minion_amplicon:$PATH\"\nconda env create -f environment.yml\nsource activate minionamplicon",
+            "title": "Conda method"
+        },
+        {
+            "location": "/installation/#docker-method",
+            "text": "Docker must already be installed  The docker image relies on conda to install all the dependencies, so the cowbat environment must be sourced within \nthe container prior to launch. The supplied command below launches container, and immediately sources the environment, and runs the \npipeline, but it is also possible to run those commands separately from within the container. For additional details on the run\ncommand, please see  the tutorial .  git clone https://github.com/adamkoziol/minion_amplicon.git\ncd minion_amplicon\ndocker build -t minionamplicon:latest .\ndocker run -it --name minionamplicon --rm minionamplicon:latest /bin/bash -c \"source activate minionamplicon && minion_amplicon_pipeline.py /path/to/store/outputs -f /path/to/FASTQsequences -r /path/to/targets\"",
+            "title": "Docker method"
+        },
+        {
+            "location": "/installation/#testing",
+            "text": "Unit tests",
+            "title": "Testing"
+        },
+        {
+            "location": "/overview/",
+            "text": "Overview\n\n\nThe MinION amplicon pipeline is comprised of the following steps:\n\n\n\n\n\n\nA read baiting step where the FASTQ reads that have regions of similarity to the targets are extracted using bbduk.sh v37.78\n\n\n\n\n\n\nBaited FASTQ files are converted to FASTA format with fastq_to_fasta v0.0.14, a script from the FASTX toolkit\n\n\n\n\n\n\nA BLAST database is created for the target files using makeblastdb v2.2.31+\n\n\n\n\n\n\nThe FASTA-formatted reads are aligned against the targets using blastn v2.2.31+\n\n\n\n\n\n\nReads that match the database are extracted from the original FASTQ file using filterbyname.sh v37.78\n\n\n\n\n\n\nExtracted reads are assembled using canu v1.7\n\n\n\n\n\n\nTargets are indexed with bowtie2-build v2.3.4\n\n\n\n\n\n\nReads are mapped to the target with bowtie2 v2.3.4\n\n\n\n\n\n\nMapped read files are indexed with samtools index v1.6",
+            "title": "Overview"
+        },
+        {
+            "location": "/overview/#overview",
+            "text": "The MinION amplicon pipeline is comprised of the following steps:    A read baiting step where the FASTQ reads that have regions of similarity to the targets are extracted using bbduk.sh v37.78    Baited FASTQ files are converted to FASTA format with fastq_to_fasta v0.0.14, a script from the FASTX toolkit    A BLAST database is created for the target files using makeblastdb v2.2.31+    The FASTA-formatted reads are aligned against the targets using blastn v2.2.31+    Reads that match the database are extracted from the original FASTQ file using filterbyname.sh v37.78    Extracted reads are assembled using canu v1.7    Targets are indexed with bowtie2-build v2.3.4    Reads are mapped to the target with bowtie2 v2.3.4    Mapped read files are indexed with samtools index v1.6",
+            "title": "Overview"
+        },
+        {
+            "location": "/tests/",
+            "text": "Tests\n\n\nA test script and test datasets are included in the repository to ensure that installation of the script and dependencies \nwas successful. To run the unit tests (make sure that the cowbat conda environment is active):\n\n\ncd minion_amplicon\npytest\n\n\n\n\nIf any test fails, check the output to see where the issues occurred",
+            "title": "Tests"
+        },
+        {
+            "location": "/tests/#tests",
+            "text": "A test script and test datasets are included in the repository to ensure that installation of the script and dependencies \nwas successful. To run the unit tests (make sure that the cowbat conda environment is active):  cd minion_amplicon\npytest  If any test fails, check the output to see where the issues occurred",
+            "title": "Tests"
+        },
+        {
+            "location": "/tutorial/",
+            "text": "Tutorial\n\n\nBasic settings\n\n\nThe pipeline is designed to run with a minimum of three supplied parameters:\n\n\n* path to FASTQ sequence data (-f)\n* name and path of multi-FASTA target file (-t)\n* path to folder in which outputs should be placed\n\n\n\nFASTQ sequence data\n\n\nThe FASTQ data can be provided in one of two ways:\n\n\n1) Raw FASTQ output from the MinION\n\n\n\n\nsupply the path of the folder containing the FASTQ files\n\n\n\n\n2) Trimmed FASTQ file\n\n\n\n\nsupply the name and path of the FASTQ file\n\n\n\n\nTarget file\n\n\nThe multi-FASTA target file must have the name of the target as the header e.g.\n\n\n>NOS3\n\n\nCCCGA......\n\n\n>e35S\n\n\nGGTCC.....\n\n\nThe following command will run the pipeline on the supplied sequences with default parameters\n\n\nminion_amplicon_pipeline.py /path/to/outputfolder -f /path/to/sequences -t /path/to/targets/targets.fasta\n\n\n\n\n\nOptional parameters\n\n\nThere are a number of optional parameters than can be supplied to the minion_amplicon_pipeline.py script\n\n\nusage: minion_amplicon_pipeline.py [-h] [-l LENGTH] -t TARGETFILE\n                                   [-k KMERSIZE] [--hdist HDIST]\n                                   [-r READLENGTH] [-f FASTQFILE]\n                                   path\n\nPipeline for transgene analyses\n\npositional arguments:\n  path                  Specify path\n\noptional arguments:\n  -h, --help            show this help message and exit\n  -l LENGTH, --length LENGTH\n                        Minimum length of match. Default is 50\n  -t TARGETFILE, --targetfile TARGETFILE\n                        Name and path of multi-FASTA file of targets\n  -k KMERSIZE, --kmersize KMERSIZE\n                        Size of kmer to use when baiting reads against targets\n  --hdist HDIST         Number of mismatches to allow for baiting. Default is\n                        2.\n  -r READLENGTH, --readlength READLENGTH\n                        Minimum read length for canu\n  -f FASTQFILE, --fastqfile FASTQFILE\n                        Name and path of FASTQ file to process",
+            "title": "Tutorial"
+        },
+        {
+            "location": "/tutorial/#tutorial",
+            "text": "",
+            "title": "Tutorial"
+        },
+        {
+            "location": "/tutorial/#basic-settings",
+            "text": "The pipeline is designed to run with a minimum of three supplied parameters:  * path to FASTQ sequence data (-f)\n* name and path of multi-FASTA target file (-t)\n* path to folder in which outputs should be placed",
+            "title": "Basic settings"
+        },
+        {
+            "location": "/tutorial/#fastq-sequence-data",
+            "text": "The FASTQ data can be provided in one of two ways:  1) Raw FASTQ output from the MinION   supply the path of the folder containing the FASTQ files   2) Trimmed FASTQ file   supply the name and path of the FASTQ file",
+            "title": "FASTQ sequence data"
+        },
+        {
+            "location": "/tutorial/#target-file",
+            "text": "The multi-FASTA target file must have the name of the target as the header e.g.  >NOS3  CCCGA......  >e35S  GGTCC.....",
+            "title": "Target file"
+        },
+        {
+            "location": "/tutorial/#the-following-command-will-run-the-pipeline-on-the-supplied-sequences-with-default-parameters",
+            "text": "minion_amplicon_pipeline.py /path/to/outputfolder -f /path/to/sequences -t /path/to/targets/targets.fasta",
+            "title": "The following command will run the pipeline on the supplied sequences with default parameters"
+        },
+        {
+            "location": "/tutorial/#optional-parameters",
+            "text": "There are a number of optional parameters than can be supplied to the minion_amplicon_pipeline.py script  usage: minion_amplicon_pipeline.py [-h] [-l LENGTH] -t TARGETFILE\n                                   [-k KMERSIZE] [--hdist HDIST]\n                                   [-r READLENGTH] [-f FASTQFILE]\n                                   path\n\nPipeline for transgene analyses\n\npositional arguments:\n  path                  Specify path\n\noptional arguments:\n  -h, --help            show this help message and exit\n  -l LENGTH, --length LENGTH\n                        Minimum length of match. Default is 50\n  -t TARGETFILE, --targetfile TARGETFILE\n                        Name and path of multi-FASTA file of targets\n  -k KMERSIZE, --kmersize KMERSIZE\n                        Size of kmer to use when baiting reads against targets\n  --hdist HDIST         Number of mismatches to allow for baiting. Default is\n                        2.\n  -r READLENGTH, --readlength READLENGTH\n                        Minimum read length for canu\n  -f FASTQFILE, --fastqfile FASTQFILE\n                        Name and path of FASTQ file to process",
+            "title": "Optional parameters"
+        }
+    ]
+}
