@@ -10,7 +10,7 @@ import os
 testpath = os.path.abspath(os.path.dirname(__file__))
 scriptpath = os.path.join(testpath, '..')
 sys.path.append(scriptpath)
-from minion_amplicon_pipeline import ParseBlast
+from minion_amplicon_pipeline import MinionPipeline
 
 __author__ = 'adamkoziol'
 
@@ -20,6 +20,7 @@ def variables():
     v = ArgumentParser()
     v.path = os.path.join(testpath, 'testdata')
     v.targetpath = os.path.join(v.path, 'targets')
+    v.targetfile = os.path.join(v.targetpath, 'genesofinterest.fasta')
     v.fastqfile = os.path.join(v.path, 'testdata.fastq.gz')
     v.length = 50
     v.kmersize = 27
@@ -32,7 +33,7 @@ def variables():
 
 @pytest.fixture()
 def method_init(variables):
-    method = ParseBlast(variables)
+    method = MinionPipeline(variables)
     return method
 
 
@@ -56,7 +57,7 @@ def test_fastq_to_fasta(variables):
 
 def test_make_blastdb(variables):
     method.make_blastdb()
-    assert os.path.isfile(os.path.join(variables.targetpath, 'combined', 'genesofinterest.nhr'))
+    assert os.path.isfile(os.path.join(variables.targetpath, 'genesofinterest.nhr'))
 
 
 def test_blast(variables):
@@ -94,6 +95,11 @@ def test_assemble(variables):
     assert os.path.isdir(os.path.join(variables.path, 'assemblies', 'CTP2'))
 
 
+def test_target_creation(variables):
+    method.target_creation()
+    assert os.path.isfile(os.path.join(variables.path, 'targets', 'CTP2.tfa'))
+
+
 def test_bowtie_build(variables):
     method.bowtie_build()
     assert os.path.isfile(os.path.join(variables.targetpath, 'CTP2.1.bt2'))
@@ -121,13 +127,19 @@ def test_clean_indices(variables):
         os.remove(index)
 
 
-def test_clean_blast(variables):
-    database_files = glob(os.path.join(variables.targetpath, 'combined', '*.n*'))
-    for db_file in database_files:
-        os.remove(db_file)
+def test_clean_targets(variables):
+    target_files = glob(os.path.join(variables.targetpath, '*.tfa'))
+    for target_file in target_files:
+        os.remove(target_file)
 
 
 def test_clean_fai(variables):
     fai_files = glob(os.path.join(variables.targetpath, '*.fai'))
     for fai in fai_files:
         os.remove(fai)
+
+
+def test_clean_blast(variables):
+    database_files = glob(os.path.join(variables.targetpath, '*.n*'))
+    for db_file in database_files:
+        os.remove(db_file)

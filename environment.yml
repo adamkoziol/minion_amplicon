@@ -1,4 +1,4 @@
-name: cowbat
+name: minionamplicon
 channels:
   - biobuilds
   - eclarke
@@ -11,7 +11,6 @@ dependencies:
   - libssh2=1.8.0=1
   - prodigal=2.6.3=0
   - bbmap=37.78=0
-  - bcftools=1.6=0
   - bedtools=2.27.1=0
   - blast=2.2.31=1
   - bowtie2=2.3.4=py35pl5.22.0_0
@@ -30,8 +29,6 @@ dependencies:
   - qualimap=2.2.2a=1
   - samtools=1.6=0
   - seqtk=1.2=0
-  - sistr_cmd=1.0.2=py35_0
-  - spades=3.11.1=py35_zlib1.2.8_0
   - tablet=1.17.08.17=1
   - anaconda-client=1.6.5=py_0
   - asn1crypto=0.22.0=py35_0
@@ -130,10 +127,10 @@ dependencies:
   - mkl=2018.0.1=h19d6760_4
   - openjdk=8.0.121=1
   - pycurl=7.43.0=py35_2
-  - bcl2fastq=2.19.0=1
   - boost_lib=1.54.0=1
   - gsl=1.16=0
-  - clark=1.2.3=1
+  - canu=1.7=pl5.22.0_0
+  - porechop=0.2.3_seqan2.1.1=py35_2
   - pip:
     - attrs==17.4.0
     - biopython==1.70
@@ -158,5 +155,3 @@ dependencies:
     - tables==3.4.2
     - tornado==4.5.3
     - xlsxwriter==1.0.2
-prefix: /home/adamkoziol/miniconda/envs/cowbat
-
