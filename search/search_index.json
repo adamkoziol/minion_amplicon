@@ -7,17 +7,17 @@
         },
         {
             "location": "/installation/",
-            "text": "MinION Amplicon Pipelinw Installation\n\n\nDependencies\n\n\n\n\nLinux system\n\n\nConda\n\n\nDocker\n\n\n\n\nConda method\n\n\nThe way I install conda:\n\n\nwget https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh -O miniconda.sh\nbash miniconda.sh -b -p $HOME/miniconda\nexport PATH=\"$HOME/miniconda/bin:$PATH\"\nconda config --set always_yes yes\nconda update -q conda\n\n\n\n\nThe easiest way to install the pipeline is to download the source code \nGitHub Link\n\n\ngit clone https://github.com/adamkoziol/minion_amplicon.git\ncd minion_amplicon\nexport PATH=\"/path/to/repository/minion_amplicon:$PATH\"\nconda env create -f environment.yml\nsource activate minionamplicon\n\n\n\n\nDocker method\n\n\nDocker must already be installed\n\n\nThe docker image relies on conda to install all the dependencies, so the minionamplicon environment must be sourced within \nthe container prior to launch. The supplied command below launches container, and immediately sources the environment, and runs the \npipeline, but it is also possible to run those commands separately from within the container. For additional details on the run\ncommand, please see \nthe tutorial\n.\n\n\ngit clone https://github.com/adamkoziol/minion_amplicon.git\ncd minion_amplicon\ndocker build -t minionamplicon:latest .\ndocker run -it --name minionamplicon --rm minionamplicon:latest /bin/bash -c \"source activate minionamplicon && minion_amplicon_pipeline.py /path/to/store/outputs -f /path/to/FASTQsequences -r /path/to/targets\"\n\n\n\n\nTesting\n\n\nUnit tests",
+            "text": "MinION Amplicon Pipeline Installation\n\n\nDependencies\n\n\n\n\nLinux system\n\n\nConda\n AND/OR \nDocker\n\n\n\n\nConda method\n\n\nThe way I install conda:\n\n\nwget https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh -O miniconda.sh\nbash miniconda.sh -b -p $HOME/miniconda\nexport PATH=\"$HOME/miniconda/bin:$PATH\"\nconda config --set always_yes yes\nconda update -q conda\n\n\n\n\nThe easiest way to install the pipeline is to download the source code \nGitHub Link\n\n\ngit clone https://github.com/adamkoziol/minion_amplicon.git\ncd minion_amplicon\nexport PATH=\"/path/to/repository/minion_amplicon:$PATH\"\nconda env create -f environment.yml\nsource activate minionamplicon\n\n\n\n\nDocker method\n\n\nThe docker image relies on conda to install all the dependencies, so the minionamplicon environment must be sourced within \nthe container prior to launch. The supplied command below launches container, and immediately sources the environment, and runs the \npipeline, but it is also possible to run those commands separately from within the container. For additional details on the run\ncommand, please see \nthe tutorial\n.\n\n\ngit clone https://github.com/adamkoziol/minion_amplicon.git\ncd minion_amplicon\ndocker build -t minionamplicon:latest .\ndocker run -it --name minionamplicon --rm minionamplicon:latest /bin/bash -c \"source activate minionamplicon && minion_amplicon_pipeline.py /path/to/store/outputs -f /path/to/FASTQsequences -r /path/to/targets\"\n\n\n\n\nTesting\n\n\nUnit tests",
             "title": "Installation"
         },
         {
-            "location": "/installation/#minion-amplicon-pipelinw-installation",
+            "location": "/installation/#minion-amplicon-pipeline-installation",
             "text": "",
-            "title": "MinION Amplicon Pipelinw Installation"
+            "title": "MinION Amplicon Pipeline Installation"
         },
         {
             "location": "/installation/#dependencies",
-            "text": "Linux system  Conda  Docker",
+            "text": "Linux system  Conda  AND/OR  Docker",
             "title": "Dependencies"
         },
         {
@@ -27,7 +27,7 @@
         },
         {
             "location": "/installation/#docker-method",
-            "text": "Docker must already be installed  The docker image relies on conda to install all the dependencies, so the minionamplicon environment must be sourced within \nthe container prior to launch. The supplied command below launches container, and immediately sources the environment, and runs the \npipeline, but it is also possible to run those commands separately from within the container. For additional details on the run\ncommand, please see  the tutorial .  git clone https://github.com/adamkoziol/minion_amplicon.git\ncd minion_amplicon\ndocker build -t minionamplicon:latest .\ndocker run -it --name minionamplicon --rm minionamplicon:latest /bin/bash -c \"source activate minionamplicon && minion_amplicon_pipeline.py /path/to/store/outputs -f /path/to/FASTQsequences -r /path/to/targets\"",
+            "text": "The docker image relies on conda to install all the dependencies, so the minionamplicon environment must be sourced within \nthe container prior to launch. The supplied command below launches container, and immediately sources the environment, and runs the \npipeline, but it is also possible to run those commands separately from within the container. For additional details on the run\ncommand, please see  the tutorial .  git clone https://github.com/adamkoziol/minion_amplicon.git\ncd minion_amplicon\ndocker build -t minionamplicon:latest .\ndocker run -it --name minionamplicon --rm minionamplicon:latest /bin/bash -c \"source activate minionamplicon && minion_amplicon_pipeline.py /path/to/store/outputs -f /path/to/FASTQsequences -r /path/to/targets\"",
             "title": "Docker method"
         },
         {

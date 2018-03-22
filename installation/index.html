@@ -86,19 +86,18 @@
         <div class="container">
                 <div class="col-md-3"><div class="bs-sidebar hidden-print affix well" role="complementary">
     <ul class="nav bs-sidenav">
-        <li class="main active"><a href="#minion-amplicon-pipelinw-installation">MinION Amplicon Pipelinw Installation</a></li>
+        <li class="main active"><a href="#minion-amplicon-pipeline-installation">MinION Amplicon Pipeline Installation</a></li>
             <li><a href="#dependencies">Dependencies</a></li>
             <li><a href="#testing">Testing</a></li>
     </ul>
 </div></div>
                 <div class="col-md-9" role="main">
 
-<h2 id="minion-amplicon-pipelinw-installation">MinION Amplicon Pipelinw Installation</h2>
+<h2 id="minion-amplicon-pipeline-installation">MinION Amplicon Pipeline Installation</h2>
 <h3 id="dependencies">Dependencies</h3>
 <ul>
 <li>Linux system</li>
-<li><a href="https://conda.io/docs/user-guide/install/linux.html">Conda</a></li>
-<li><a href="https://www.docker.com/">Docker</a></li>
+<li><a href="https://conda.io/docs/user-guide/install/linux.html">Conda</a> AND/OR <a href="https://www.docker.com/">Docker</a></li>
 </ul>
 <h4 id="conda-method">Conda method</h4>
 <p>The way I install conda:</p>
@@ -118,7 +117,6 @@ source activate minionamplicon
 </code></pre>
 
 <h4 id="docker-method">Docker method</h4>
-<p>Docker must already be installed</p>
 <p>The docker image relies on conda to install all the dependencies, so the minionamplicon environment must be sourced within 
 the container prior to launch. The supplied command below launches container, and immediately sources the environment, and runs the 
 pipeline, but it is also possible to run those commands separately from within the container. For additional details on the run
