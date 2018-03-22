@@ -28,6 +28,7 @@ def variables():
     v.readlength = 400
     v.startingtime = time()
     v.scriptpath = scriptpath
+    v.overhang = 1
     return v
 
 
@@ -113,6 +114,16 @@ def test_bowtie_run(variables):
 def test_samtools_index(variables):
     method.samtools_index()
     assert os.path.isfile(os.path.join(variables.path, 'sequences', 'CTP2', 'CTP2_sorted.bam.bai'))
+
+
+def test_extract_overhangs():
+    method.extract_overhangs()
+    assert len(method.rightrecords['CTP2']) == 12
+
+
+def test_overhang_aligner(variables):
+    method.overhang_aligner()
+    assert os.path.isfile(os.path.join(variables.path, 'aligned_overhangs', 'CTP2_left_overhang_aligned.fasta'))
 
 
 def test_clean_folder(variables):

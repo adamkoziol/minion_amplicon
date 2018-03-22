@@ -1,12 +1,18 @@
 #!/usr/bin/env python3
 from accessoryFunctions.accessoryFunctions import make_path, printtime
 from Bio.Blast.Applications import NcbiblastnCommandline
+from Bio.Application import ApplicationError
+from Bio.SeqRecord import SeqRecord
+from Bio.Alphabet import IUPAC
+from Bio.Seq import Seq
 from Bio import SeqIO
 from argparse import ArgumentParser
 from subprocess import call
 from csv import DictReader
 import multiprocessing
 from time import time
+import shutil
+import pysam
 import os
 
 __author__ = 'adamkoziol'
@@ -36,6 +42,8 @@ class MinionPipeline(object):
         self.bowtie_build()
         self.bowtie_run()
         self.samtools_index()
+        self.extract_overhangs()
+        self.overhang_aligner()
 
     def combine_fastq(self):
         """
@@ -78,13 +86,14 @@ class MinionPipeline(object):
         """
         printtime('Baiting FASTQ reads with targets', self.start)
         # Create the system call to bbduk - use the user-supplied kmer length, and hdist values
-        bait_command = 'bbduk.sh -overwrite=true -in={reads} ' \
+        bait_command = 'bbduk.sh -overwrite=true -in={reads} minlength={minreadlength} ' \
                        'threads={cpus} outm={filteredbaits} k={kmer} maskmiddle=t hdist={hdist} ref={reference}'\
             .format(reads=self.reads,
+                    minreadlength=self.minreadlength,
                     cpus=self.cpus,
                     kmer=self.kmer,
                     hdist=self.hdist,
-                    reference=self.target,
+                    reference=self.no_wheat if self.no_wheat else self.target,
                     filteredbaits=self.filteredfastq
                     )
         # Run the system call if the baited FASTQ file hasn't already been created
@@ -264,6 +273,8 @@ class MinionPipeline(object):
             target_file = os.path.join(target_base, '{}.tfa'.format(record.id))
             # Populate the dictionary of subject: target file
             self.target_files[record.id] = target_file
+            # Populate the dictionary of subject: record
+            self.record_dict[record.id] = record
             if not os.path.isfile(target_file):
                 with open(target_file, 'w') as target:
                     SeqIO.write(record, target, 'fasta')
@@ -297,7 +308,7 @@ class MinionPipeline(object):
             # Bowtie2 command piped to samtools view to convert data to BAM format piped to samtools sort to
             # sort the BAM file
             map_command = 'bowtie2 -x {base} -U {fastq} --very-sensitive-local --local -p {threads} | ' \
-                          'samtools view -@ {threads}-h -F 4 -bT {target} - | ' \
+                          'samtools view -@ {threads} -h -F 4 -bT {target} - | ' \
                           'samtools sort - -@ {threads} -o {sortedbam}'\
                 .format(base=self.basedict[subject],
                         fastq=fastq,
@@ -319,128 +330,101 @@ class MinionPipeline(object):
             index_command = 'samtools index {bamfile}'.format(bamfile=bamfile)
             if not os.path.isfile('{bamfile}.bai'.format(bamfile=bamfile)):
                 call(index_command, shell=True, stdout=self.devnull, stderr=self.devnull)
-    '''
-    def parse_bam(self):
-        """
 
+    def extract_overhangs(self):
         """
+        Find the clipped off ends from the reads, concatenate the reference sequence to the overhang
+        """
+        printtime('Extracting 5\' and 3\' overhangs', self.start)
         for subject, bamfile in self.bamdict.items():
+            # Initialise dictionaries to hold lists
+            self.overhang_dict[subject] = list()
+            self.leftrecords[subject] = list()
+            self.rightrecords[subject] = list()
+            # Extract the reference sequence from the dictionary
+            refseq = str(self.record_dict[subject].seq.lower())
             # Create a pysam alignment file object of the sorted bam file
             bamfile = pysam.AlignmentFile(bamfile, 'rb')
             # Iterate through each read in the bamfile
             for record in bamfile.fetch():
-                # Initialise the starting position of the read to 0
-                readpos = 0
-                # Set the name and starting position of the match with the reference
-                contig = record.reference_name
-                refpos = record.reference_start
-                # Iterate through the cigar tuples in the cigartuples attribute
-                for cigartuple in record.cigartuples:
-                    # Split the cigar tuple into the cigar feature (0: match, 1: insertion, 2: deletion, 3: skip,
-                    # 4: soft clipping, 5: hard clipping, 6: padding) and the length of the cigar feature
-                    cigartype, cigarlength = cigartuple
-                    # Treat the different cigar features accordingly. For matches, add the query sequence at each
-                    # reference position to the dictionary
-                    if cigartype == 0:  # match
-                        # Variable to store the final position reached in the read
-                        final = 0
-                        for i in range(readpos, readpos + cigarlength):
-                            try:
-                                sample[self.analysistype].sequence[contig][refpos].append(record.query_sequence[i])
-                            except KeyError:
-                                try:
-                                    sample[self.analysistype].sequence[contig][refpos] = list()
-                                    sample[self.analysistype].sequence[contig][refpos].append(record.query_sequence[i])
-                                except KeyError:
-                                    sample[self.analysistype].sequence[contig] = dict()
-                                    sample[self.analysistype].sequence[contig][refpos] = list()
-                                    sample[self.analysistype].sequence[contig][refpos].append(record.query_sequence[i])
-                            # Increment the reference position for each bases in the query
-                            refpos += 1
-                            # Increment the final position - I used a variable here rather than incrementing readpos,
-                            # as I didn't want any issues with incrementing readpos while in a loop reference readpos
-                            final = i + 1
-                        # Set the final position of the read
-                        readpos = final
-                    # Add the query sequence from the insertion, but don't increment the refpos; will increase the
-                    # length of the query sequence compared to the reference
-                    elif cigartype == 1:  # insertions
-                        final = 0
-                        for i in range(readpos, readpos + cigarlength):
-                            try:
-                                self.sequence[contig][refpos].append(record.query_sequence[i])
-                            except KeyError:
-                                try:
-                                    self.sequence[contig][refpos] = list()
-                                    self.sequence[contig][refpos].append(record.query_sequence[i])
-                                except KeyError:
-                                    self.sequence[contig] = dict()
-                                    self.sequence[contig][refpos] = list()
-                                    self.sequence[contig][refpos].append(record.query_sequence[i])
-                            # Don't increment refpos, as this insertion is occurring between reference bases
-                            final = i + 1
-                        # Add the insertion feature to the dictionary
-                        for i in range(readpos, readpos + cigarlength):
-                            try:
-                                self.features[contig][refpos].append('insertion')
-                            except KeyError:
-                                try:
-                                    self.features[contig][refpos] = list()
-                                    self.features[contig][refpos].append('insertion')
-                                except KeyError:
-                                    self.features[contig] = dict()
-                                    self.features[contig][refpos] = list()
-                                    self.features[contig][refpos].append('insertion')
-                        # Set the final read position
-                        readpos = final
-                    # Add gaps (-) to the query sequence, but don't increment the readpos; will ensure that the
-                    # reference and query sequences stay the same length
-                    elif cigartype == 2:  # deletion
-                        for i in range(readpos, readpos + cigarlength):
-                            try:
-                                self.sequence[contig][refpos].append('-')
-                            except KeyError:
-                                try:
-                                    self.sequence[contig][refpos] = list()
-                                    self.sequence[contig][refpos].append('-')
-                                except KeyError:
-                                    self.sequence[contig] = dict()
-                                    self.sequence[contig][refpos] = list()
-                                    self.sequence[contig][refpos].append('-')
-                            # Don't increment read pos, as the deletion is occurring between query bases
-                            refpos += 1
-                    # Don't worry about skips yet. Have not found this cigar feature in any datasets so far
-                    elif cigartype == 3:  # skip
-                        pass
-                    # An issue that was occurring with the parsing was internal soft clipping. Essentially, 5' reads
-                    # would be soft right-clipped, and 3' reads would be soft left-clipped. At the resulting junction
-                    # between the two clipped reads, the sequence data would look good, but only because of this
-                    # undesired clipping. Add the internal soft clip feature to the dictionary
-                    elif cigartype == 4:  # soft clipping
-                        record_length = float(len(str(self.record_dict[subject][record.reference_name].seq)))
-                        record_length_ninety = record_length * 0.95
-                        # Determine if a soft clip is internal
-                        if float(record.reference_start) >= (record_length - record_length_ninety) \
-                                and float(record.reference_end) <= record_length_ninety:
-                            try:
-                                self.features[contig][refpos].append('internal soft clip')
-                            except KeyError:
-                                try:
-                                    self.features[contig][refpos] = list()
-                                    self.features[contig][refpos].append('internal soft clip')
-                                except KeyError:
-                                    self.features[contig] = dict()
-                                    self.features[contig][refpos] = list()
-                                    self.features[contig][refpos].append('internal soft clip')
-                        # Increment the readpos by the length of the soft clipping feature
-                        readpos += cigarlength
-                    # Don't worry about hard clipping. Have not found this cigar feature in any datasets so far
-                    elif cigartype == 5:  # hard clipping
-                        pass
-                    # Don't worry about padding yet. Have not found this cigar feature in any datasets so far
-                    elif cigartype == 6:  # padding
-                        pass
-    '''
+                # Examine the first entry in the first tuple in the cigartuples attribute. If the entry is 4, then
+                # the tuple refers to a soft-clip at the beginning of the reference sequence
+                if record.cigartuples[0][0] == 4:
+                    # Ensure that the length of the extracted overhang is worth considering
+                    if record.cigartuples[0][1] >= self.overhang_length:
+                        # Create a sequence consisting of the 5' overlap joined to the reference sequence
+                        seq = Seq('{}{}'.format(
+                            record.query_sequence[0: int('{}'.format(record.cigartuples[0][1]))],
+                            refseq),
+                            IUPAC.unambiguous_dna)
+                        # Create a sequence record of the overhang sequence
+                        seqrecord = SeqRecord(seq,
+                                              id=record.qname,
+                                              description=str())
+                        # Append the sequence record to the list
+                        self.leftrecords[subject].append(seqrecord)
+                # Examine the first entry in the final tuple in the cigartuples attribute. As above the entry must be 4
+                if record.cigartuples[-1][0] == 4:
+                    # Ensure long overhangs
+                    if record.cigartuples[0][1] >= self.overhang_length:
+                        seq = Seq('{}{}'.format(
+                            refseq,
+                            record.query_sequence[-int('{}'.format(record.cigartuples[-1][1])): -1]),
+                            IUPAC.unambiguous_dna)
+                        seqrecord = SeqRecord(seq,
+                                              id=record.qname,
+                                              description=str())
+                        # Append the record to the list of records
+                        self.rightrecords[subject].append(seqrecord)
+            # Ensure that records exist before attempting to create an output file
+            if self.leftrecords[subject]:
+                # Set the name of the file
+                left_file = os.path.join(self.overhang_path, '{}_left_overhang.fasta'.format(subject))
+                # Populate the dictionary with subject: file name
+                self.overhang_dict[subject].append(left_file)
+                printtime('Saving {numreads} 5\' overhangs for {sub}'
+                          .format(numreads=len(self.leftrecords[subject]),
+                                  sub=subject), self.start)
+                # Don't overwrite the output file
+                if not os.path.isfile(left_file):
+                    # Write the records to file
+                    with open(left_file, 'w') as left:
+                        SeqIO.write(self.leftrecords[subject], left, 'fasta')
+            # Same as above, but with the 3' overhangs
+            if self.rightrecords[subject]:
+                right_file = os.path.join(self.overhang_path, '{}_right_overhang.fasta'.format(subject))
+                self.overhang_dict[subject].append(right_file)
+                printtime('Saving {numreads} 3\' overhangs for {sub}'
+                          .format(numreads=len(self.rightrecords[subject]),
+                                  sub=subject), self.start)
+                if not os.path.isfile(right_file):
+                    with open(right_file, 'w') as right:
+                        SeqIO.write(self.rightrecords[subject], right, 'fasta')
+
+    def overhang_aligner(self):
+        """
+        Perform a multiple sequence alignment of the overhang sequences
+        """
+        from Bio.Align.Applications import ClustalOmegaCommandline
+        printtime('Aligning overhangs', self.start)
+        for subject, file_list in self.overhang_dict.items():
+            for outputfile in file_list:
+                aligned = os.path.join(self.aligned_overhangs, '{}_aligned.fasta'
+                                       .format(os.path.splitext(os.path.basename(outputfile))[0]))
+                # Create the command line call
+                clustalomega = ClustalOmegaCommandline(infile=outputfile,
+                                                       outfile=aligned,
+                                                       threads=self.cpus,
+                                                       auto=True)
+                if not os.path.isfile(aligned):
+                    printtime('Aligning overhangs for {}'.format(subject), self.start)
+                    # Perform the alignments
+                    try:
+                        clustalomega()
+                    # Files with a single sequence cannot be aligned. Copy the original file over to the aligned folder
+                    except ApplicationError:
+                        shutil.copyfile(outputfile, aligned)
+
     def __init__(self, args):
         """
         Initialises the variables required for this class
@@ -467,6 +451,7 @@ class MinionPipeline(object):
         self.kmer = args.kmersize
         self.hdist = args.hdist
         self.minreadlength = args.readlength
+        self.overhang_length = args.overhang
         self.baitpath = os.path.join(self.path, 'bait')
         make_path(self.baitpath)
         self.blastpath = os.path.join(self.path, 'blast')
@@ -477,9 +462,17 @@ class MinionPipeline(object):
         make_path(self.sequencepath)
         self.assemblypath = os.path.join(self.path, 'assemblies')
         make_path(self.assemblypath)
+        self.overhang_path = os.path.join(self.path, 'overhangs')
+        make_path(self.overhang_path)
+        self.aligned_overhangs = os.path.join(self.path, 'aligned_overhangs')
+        make_path(self.aligned_overhangs)
         self.target = os.path.join(args.targetfile)
         assert os.path.isfile(self.target), 'Cannot find the target file supplied in the arguments {}. Please ensure ' \
                                             'that the file name and path are correct'.format(self.target)
+        if os.path.isfile('{}_no_wheat.fasta'.format(os.path.splitext(self.target)[0])):
+            self.no_wheat = '{}_no_wheat.fasta'.format(os.path.splitext(self.target)[0])
+        else:
+            self.no_wheat = str()
         self.target_files = dict()
         # Remove the path and the file extension for the target file for use in BLASTing
         self.db = os.path.splitext(self.target)[0]
@@ -490,12 +483,14 @@ class MinionPipeline(object):
         self.read_dict = dict()
         self.unique_dict = dict()
         self.listdict = dict()
+        self.record_dict = dict()
         self.sequencedict = dict()
         self.targetdict = dict()
         self.basedict = dict()
         self.bamdict = dict()
-        self.sequence = dict()
-        self.features = dict()
+        self.leftrecords = dict()
+        self.rightrecords = dict()
+        self.overhang_dict = dict()
         self.devnull = open(os.devnull, 'wb')
         self.cpus = multiprocessing.cpu_count()
         # Fields used for custom outfmt 6 BLAST output:
@@ -527,6 +522,9 @@ if __name__ == '__main__':
     parser.add_argument('-f', '--fastq',
                         help='Supply either the mame and path of FASTQ file to process, or the path of raw FASTQ files '
                              'to combine and trim prior to the rest of the analyses')
+    parser.add_argument('-o', '--overhang',
+                        default=100,
+                        help='The minimum length a 5\' or 3\' overhang must be to be considered')
     arguments = parser.parse_args()
     arguments.startingtime = time()
     # Run the pipeline
