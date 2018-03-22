@@ -366,7 +366,7 @@ class MinionPipeline(object):
                 # Examine the first entry in the final tuple in the cigartuples attribute. As above the entry must be 4
                 if record.cigartuples[-1][0] == 4:
                     # Ensure long overhangs
-                    if record.cigartuples[0][1] >= self.overhang_length:
+                    if record.cigartuples[-1][1] >= self.overhang_length:
                         seq = Seq('{}{}'.format(
                             refseq,
                             record.query_sequence[-int('{}'.format(record.cigartuples[-1][1])): -1]),
