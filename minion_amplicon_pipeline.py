@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 from accessoryFunctions.accessoryFunctions import make_path, printtime
 from Bio.Blast.Applications import NcbiblastnCommandline
-from Bio.Application import ApplicationError
 from Bio.SeqRecord import SeqRecord
 from Bio.Alphabet import IUPAC
 from Bio.Seq import Seq
@@ -11,7 +10,6 @@ from subprocess import call
 from csv import DictReader
 import multiprocessing
 from time import time
-import shutil
 import pysam
 import os
 
@@ -29,21 +27,29 @@ class MinionPipeline(object):
             self.trim_fastq()
             self.clump_reads()
         self.bait()
+        self.reformat_reads()
         self.fastq_to_fasta()
-        self.make_blastdb()
+        self.make_blastdb(self.target, self.db)
         self.blast()
         self.blast_parser()
         self.populate_unique()
         self.find_unique()
         self.create_lists()
         self.bin_fastq()
-        self.assemble()
-        self.target_creation()
-        self.bowtie_build()
+        if self.assemble_reads:
+            self.assemble()
+        self.target_creation(self.target)
+        self.bowtie_build(self.target)
         self.bowtie_run()
         self.samtools_index()
         self.extract_overhangs()
-        self.overhang_aligner()
+        self.make_blastdb(self.wheat, self.wheat_db)
+        self.target_creation(self.wheat)
+        self.bowtie_build(self.wheat)
+        self.blast_overhangs()
+        self.parse_overhang_blast()
+        self.output_overhang_results()
+        self.overhang_bowtie_run()
 
     def combine_fastq(self):
         """
@@ -86,19 +92,30 @@ class MinionPipeline(object):
         """
         printtime('Baiting FASTQ reads with targets', self.start)
         # Create the system call to bbduk - use the user-supplied kmer length, and hdist values
-        bait_command = 'bbduk.sh -overwrite=true -in={reads} minlength={minreadlength} ' \
+        bait_command = 'bbduk.sh -overwrite=true -in={reads} ' \
                        'threads={cpus} outm={filteredbaits} k={kmer} maskmiddle=t hdist={hdist} ref={reference}'\
             .format(reads=self.reads,
-                    minreadlength=self.minreadlength,
                     cpus=self.cpus,
                     kmer=self.kmer,
                     hdist=self.hdist,
-                    reference=self.no_wheat if self.no_wheat else self.target,
+                    reference=self.target,
                     filteredbaits=self.filteredfastq
                     )
         # Run the system call if the baited FASTQ file hasn't already been created
         if not os.path.isfile(self.filteredfastq):
             call(bait_command, shell=True, stdout=self.devnull, stderr=self.devnull)
+
+    def reformat_reads(self):
+        """
+        Remove any reads below the user-inputted minimum read length
+        """
+        printtime('Filtering FASTQ reads below {} bp'.format(self.minreadlength), self.start)
+        # Create the system call to bbduk - use the user-supplied kmer length, and hdist values
+        filter_command = 'reformat.sh -ow=true -in={reads} -out={reads} -minlength={minlength} -zl=9'\
+            .format(reads=self.filteredfastq,
+                    minlength=self.minreadlength)
+        # Run the system call
+        call(filter_command, shell=True, stdout=self.devnull, stderr=self.devnull)
 
     def fastq_to_fasta(self):
         """
@@ -111,17 +128,19 @@ class MinionPipeline(object):
         if not os.path.isfile(self.filteredfasta):
             call(convert_command, shell=True, stdout=self.devnull, stderr=self.devnull)
 
-    def make_blastdb(self):
+    def make_blastdb(self, target, db):
         """
         Create the BLAST database using the combined target file
+        :param target:
+        :param db:
         """
         printtime('Creating BLAST databases', self.start)
         # Create a variable to store the name of one of the database files
-        nhr = '{}.nhr'.format(self.db)
+        nhr = '{}.nhr'.format(db)
         if not os.path.isfile(nhr):
             makedb_command = 'makeblastdb -dbtype nucl -in {target} -out {reference}'\
-                .format(target=self.target,
-                        reference=self.db)
+                .format(target=target,
+                        reference=db)
             call(makedb_command, shell=True, stdout=self.devnull, stderr=self.devnull)
 
     def blast(self):
@@ -260,15 +279,15 @@ class MinionPipeline(object):
                                   subject=subject), self.start)
                 call(canu_command, shell=True, stdout=self.devnull, stderr=self.devnull)
 
-    def target_creation(self):
+    def target_creation(self, fasta):
         """
         Split the multi-FASTA target file into FASTA files for each target in the file
         """
         # Create a generator of all the FASTA records
-        records = SeqIO.parse(self.target, 'fasta')
+        records = SeqIO.parse(fasta, 'fasta')
         for record in records:
             # Extract the path information from the target file name/path variable
-            target_base = os.path.dirname(self.target)
+            target_base = os.path.dirname(fasta)
             # Create the name of the new target-specific FASTA file
             target_file = os.path.join(target_base, '{}.tfa'.format(record.id))
             # Populate the dictionary of subject: target file
@@ -279,7 +298,7 @@ class MinionPipeline(object):
                 with open(target_file, 'w') as target:
                     SeqIO.write(record, target, 'fasta')
 
-    def bowtie_build(self):
+    def bowtie_build(self, fasta_file):
         """
         Use bowtie2-build to index each target file
         """
@@ -333,15 +352,27 @@ class MinionPipeline(object):
 
     def extract_overhangs(self):
         """
-        Find the clipped off ends from the reads, concatenate the reference sequence to the overhang
+        Find the clipped off ends from the reads, and either concatenate the reference sequence to the overhang and
+        export, or skip the concatenation step and export
         """
         printtime('Extracting 5\' and 3\' overhangs', self.start)
+        left_read_ids = dict()
+        right_read_ids = dict()
         for subject, bamfile in self.bamdict.items():
             # Initialise dictionaries to hold lists
-            self.overhang_dict[subject] = list()
+            self.overhang_fasta[subject] = list()
+            self.overhang_fastq[subject] = list()
+            self.chimeric_overhang_dict[subject] = list()
             self.leftrecords[subject] = list()
+            self.leftfastqrecords[subject] = list()
+            self.chimericleftrecords[subject] = list()
             self.rightrecords[subject] = list()
-            # Extract the reference sequence from the dictionary
+            self.rightfastqrecords[subject] = list()
+            self.chimericrightrecords[subject] = list()
+            left_read_ids[subject] = list()
+            right_read_ids[subject] = list()
+            # Extract the reference sequence from the dictionary - set it to lowercase for quick identification
+            # in chimeric files
             refseq = str(self.record_dict[subject].seq.lower())
             # Create a pysam alignment file object of the sorted bam file
             bamfile = pysam.AlignmentFile(bamfile, 'rb')
@@ -352,78 +383,286 @@ class MinionPipeline(object):
                 if record.cigartuples[0][0] == 4:
                     # Ensure that the length of the extracted overhang is worth considering
                     if record.cigartuples[0][1] >= self.overhang_length:
-                        # Create a sequence consisting of the 5' overlap joined to the reference sequence
-                        seq = Seq('{}{}'.format(
+                        # Create a sequence consisting of the 5' overlap
+                        seq = Seq(
                             record.query_sequence[0: int('{}'.format(record.cigartuples[0][1]))],
-                            refseq),
                             IUPAC.unambiguous_dna)
                         # Create a sequence record of the overhang sequence
                         seqrecord = SeqRecord(seq,
                                               id=record.qname,
                                               description=str())
+                        fastq_seqrecord = SeqRecord(seq,
+                                                    id=record.qname,
+                                                    description=str(),
+                                                    letter_annotations={
+                                                        'phred_quality':
+                                                            list(record.query_qualities)
+                                                            [0: int('{}'.format(record.cigartuples[0][1]))]})
                         # Append the sequence record to the list
-                        self.leftrecords[subject].append(seqrecord)
+                        if record.qname not in left_read_ids[subject]:
+                            self.leftrecords[subject].append(seqrecord)
+                            self.leftfastqrecords[subject].append(fastq_seqrecord)
+                            left_read_ids[subject].append(record.qname)
+
+                        # Create a sequence consisting of the 5' overlap joined to the reference sequence
+                        chimera_seq = Seq('{}{}'.format(
+                            record.query_sequence[0: int('{}'.format(record.cigartuples[0][1]))],
+                            refseq),
+                            IUPAC.unambiguous_dna)
+
+                        # Create a sequence record of the overhang sequence
+                        chimera_seqrecord = SeqRecord(chimera_seq,
+                                                      id=record.qname,
+                                                      description=str())
+                        # Append the sequence record to the list
+                        self.chimericleftrecords[subject].append(chimera_seqrecord)
                 # Examine the first entry in the final tuple in the cigartuples attribute. As above the entry must be 4
                 if record.cigartuples[-1][0] == 4:
                     # Ensure long overhangs
                     if record.cigartuples[-1][1] >= self.overhang_length:
-                        seq = Seq('{}{}'.format(
-                            refseq,
-                            record.query_sequence[-int('{}'.format(record.cigartuples[-1][1])): -1]),
+                        seq = Seq(
+                            record.query_sequence[-int('{}'.format(record.cigartuples[-1][1])): -1],
                             IUPAC.unambiguous_dna)
                         seqrecord = SeqRecord(seq,
                                               id=record.qname,
                                               description=str())
+                        fastq_seqrecord = SeqRecord(seq,
+                                                    id=record.qname,
+                                                    description=str(),
+                                                    letter_annotations={
+                                                        'phred_quality':
+                                                            list(record.query_qualities)
+                                                            [-int('{}'.format(record.cigartuples[-1][1])): -1]})
                         # Append the record to the list of records
-                        self.rightrecords[subject].append(seqrecord)
+                        # Append the sequence record to the list
+                        if record.qname not in right_read_ids[subject]:
+                            self.rightrecords[subject].append(seqrecord)
+                            self.rightfastqrecords[subject].append(fastq_seqrecord)
+                            right_read_ids[subject].append(record.qname)
+                        chimera_seq = Seq('{}{}'.format(
+                            refseq,
+                            record.query_sequence[-int('{}'.format(record.cigartuples[-1][1])): -1]),
+                            IUPAC.unambiguous_dna)
+                        chimera_seqrecord = SeqRecord(chimera_seq,
+                                                      id=record.qname,
+                                                      description=str())
+                        # Append the record to the list of records
+                        self.chimericrightrecords[subject].append(chimera_seqrecord)
+
             # Ensure that records exist before attempting to create an output file
             if self.leftrecords[subject]:
                 # Set the name of the file
-                left_file = os.path.join(self.overhang_path, '{}_left_overhang.fasta'.format(subject))
-                # Populate the dictionary with subject: file name
-                self.overhang_dict[subject].append(left_file)
+                left_file = os.path.join(self.overhang_path, '{}_left_overhang'.format(subject))
                 printtime('Saving {numreads} 5\' overhangs for {sub}'
                           .format(numreads=len(self.leftrecords[subject]),
                                   sub=subject), self.start)
                 # Don't overwrite the output file
-                if not os.path.isfile(left_file):
+                fasta = left_file + '.fasta'
+                fastq = left_file + '.fastq'
+                # Populate the dictionary with subject: file name
+                self.overhang_fasta[subject].append(fasta)
+                self.overhang_fastq[subject].append(fastq)
+                if not os.path.isfile(fasta):
                     # Write the records to file
-                    with open(left_file, 'w') as left:
+                    with open(fasta, 'w') as left:
                         SeqIO.write(self.leftrecords[subject], left, 'fasta')
+                if not os.path.isfile(fastq):
+                    # Write the records to file
+                    with open(fastq, 'w') as left:
+                        SeqIO.write(self.leftfastqrecords[subject], left, 'fastq')
+
+                # Set the name of the chimeric file
+                chimeric_left_file = os.path.join(self.overhang_path,
+                                                  '{}_chimeric_left_overhang.fasta'.format(subject))
+                # Populate the dictionary with subject: file name
+                self.chimeric_overhang_dict[subject].append(left_file)
+                # Don't overwrite the output file
+                if not os.path.isfile(chimeric_left_file):
+                    # Write the records to file
+                    with open(chimeric_left_file, 'w') as left:
+                        SeqIO.write(self.chimericleftrecords[subject], left, 'fasta')
             # Same as above, but with the 3' overhangs
             if self.rightrecords[subject]:
-                right_file = os.path.join(self.overhang_path, '{}_right_overhang.fasta'.format(subject))
-                self.overhang_dict[subject].append(right_file)
+                right_file = os.path.join(self.overhang_path, '{}_right_overhang'.format(subject))
+
                 printtime('Saving {numreads} 3\' overhangs for {sub}'
                           .format(numreads=len(self.rightrecords[subject]),
                                   sub=subject), self.start)
-                if not os.path.isfile(right_file):
-                    with open(right_file, 'w') as right:
+                fasta = right_file + '.fasta'
+                fastq = right_file + '.fastq'
+                self.overhang_fasta[subject].append(fasta)
+                self.overhang_fastq[subject].append(fastq)
+                if not os.path.isfile(fasta):
+                    # Write the records to file
+                    with open(fasta, 'w') as right:
                         SeqIO.write(self.rightrecords[subject], right, 'fasta')
+                if not os.path.isfile(fastq):
+                    # Write the records to file
+                    with open(fastq, 'w') as right:
+                        SeqIO.write(self.rightfastqrecords[subject], right, 'fastq')
 
-    def overhang_aligner(self):
+                chimeric_right_file = os.path.join(self.overhang_path,
+                                                   '{}_chimeric_right_overhang.fasta'.format(subject))
+                self.chimeric_overhang_dict[subject].append(right_file)
+                if not os.path.isfile(chimeric_right_file):
+                    with open(chimeric_right_file, 'w') as right:
+                        SeqIO.write(self.chimericrightrecords[subject], right, 'fasta')
+
+    def blast_overhangs(self):
         """
-        Perform a multiple sequence alignment of the overhang sequences
+        BLAST overhangs against the original target file to determine the neighbours of each gene
         """
-        from Bio.Align.Applications import ClustalOmegaCommandline
-        printtime('Aligning overhangs', self.start)
-        for subject, file_list in self.overhang_dict.items():
-            for outputfile in file_list:
-                aligned = os.path.join(self.aligned_overhangs, '{}_aligned.fasta'
-                                       .format(os.path.splitext(os.path.basename(outputfile))[0]))
-                # Create the command line call
-                clustalomega = ClustalOmegaCommandline(infile=outputfile,
-                                                       outfile=aligned,
-                                                       threads=self.cpus,
-                                                       auto=True)
-                if not os.path.isfile(aligned):
-                    printtime('Aligning overhangs for {}'.format(subject), self.start)
-                    # Perform the alignments
-                    try:
-                        clustalomega()
-                    # Files with a single sequence cannot be aligned. Copy the original file over to the aligned folder
-                    except ApplicationError:
-                        shutil.copyfile(outputfile, aligned)
+        printtime('Performing BLAST analyses', self.start)
+        for subject, overhang_files in self.overhang_fasta.items():
+            self.blast_report_dict[subject] = list()
+            out_path = os.path.join(self.overhang_path, subject)
+            make_path(out_path)
+            for overhang_file in overhang_files:
+                direction = 'left' if 'left' in overhang_file else 'right'
+                report = os.path.join(out_path, '{sub}_{dir}_blast_results.csv'
+                                      .format(sub=subject,
+                                              path=out_path,
+                                              dir=direction))
+                self.blast_report_dict[subject].append(report)
+                try:
+                    size = os.path.getsize(report)
+                    # If a report was created, but no results entered - program crashed, or no sequences passed
+                    # thresholds, remove the report, and run the blast analyses again
+                    if size == 0:
+                        os.remove(report)
+                except FileNotFoundError:
+                    pass
+                # BLAST command line call. Note the high number of alignments. Due to the fact that all the
+                # targets are combined into one database, this is to ensure that all potential alignments are
+                # reported. Also note the custom outfmt: the doubled quotes are necessary to get it work
+                blastn = NcbiblastnCommandline(query=overhang_file,
+                                               db=self.wheat_db,
+                                               num_alignments=1000000,
+                                               num_threads=self.cpus,
+                                               outfmt="'6 qseqid sseqid positive mismatch gaps "
+                                                      "evalue bitscore slen length qstart qend sstart send'",
+                                               out=report)
+                # Only run blast if the report doesn't exist
+                if not os.path.isfile(report):
+                    blastn()
+
+    def parse_overhang_blast(self):
+        """
+        Parse the BLAST reports, and populate dictionaries of the length of the match is greater than the user-supplied
+        value for minimum match length
+        """
+        printtime('Parsing overhang BLAST outputs', self.start)
+        for subject, blast_reports in self.blast_report_dict.items():
+            self.overhang_blast_results[subject] = dict()
+            for report in blast_reports:
+                direction = 'left' if 'left' in report else 'right'
+                self.overhang_blast_results[subject][direction] = dict()
+                # Open the sequence profile file as a dictionary
+                blastdict = DictReader(open(report), fieldnames=self.fieldnames, dialect='excel-tab')
+                # Go through each BLAST result
+                for row in blastdict:
+                    # Create variables to store the subject and query names, as well as the length of the alignment
+                    gene = row['subject_id']
+                    query = row['query_id']
+                    length = int(row['alignment_length'])
+                    # Only save the name of the read if the hit is longer than the user-supplied value
+                    if length >= self.length:
+                        # print(subject, direction, gene, query, length)
+                        try:
+                            self.overhang_blast_results[subject][direction][gene].add(query)
+                        except KeyError:
+                            self.overhang_blast_results[subject][direction][gene] = set()
+                            self.overhang_blast_results[subject][direction][gene].add(query)
+
+    def output_overhang_results(self):
+        """
+        Parse the BLAST outputs to determine with which other genes in the cassette the overhang sequences share
+        sequence identity
+        """
+        printtime('Binning overhang BLAST hits', self.start)
+        fastq_bins = dict()
+        fasta_bins = dict()
+        # Start iterating through the deeply nested dictionary
+        for subject, nested_dict in self.overhang_blast_results.items():
+            fastq_bins[subject] = dict()
+            fasta_bins[subject] = dict()
+            for direction, nested_gene_dict in nested_dict.items():
+                fastq_bins[subject][direction] = dict()
+                fasta_bins[subject][direction] = dict()
+                for gene, query_set in nested_gene_dict.items():
+                    for file_type in ['fastq', 'fasta']:
+                        if file_type == 'fastq':
+                            self.overhang_fastq_bins = self.output_file(subject, direction, self.overhang_fastq,
+                                                                        gene, query_set, file_type, fastq_bins)
+                        else:
+                            self.overhang_fasta_bins = self.output_file(subject, direction, self.overhang_fasta,
+                                                                        gene, query_set, file_type, fasta_bins)
+
+    def output_file(self, subject, direction, dictionary, gene, query_set, file_type, outdict):
+        """
+
+        :return:
+        """
+        # Determine which overhang sequence-containing FASTA file to use depending on the direction.
+        fastafile = dictionary[subject][0] if direction in dictionary[subject][0] \
+            else dictionary[subject][1]
+        # Load the records from the FASTA file to a dictionary
+        record_dict = SeqIO.to_dict(SeqIO.parse(fastafile, file_type))
+        # Set the name of the output path for the BLAST-binned reads
+        output_path = os.path.join(self.bin_path, subject)
+        make_path(output_path)
+        # Create the name of the file. It must contain the subject, the matching gene, and the direction
+        output_file = os.path.join(output_path, '{subject}_{gene}_{dir}.{filetype}'
+                                   .format(subject=subject,
+                                           gene=gene,
+                                           dir=direction,
+                                           filetype=file_type))
+        outdict[subject][direction][gene] = output_file
+        # Create a text file to store only the read names
+        text_file = '{}.txt'.format(os.path.splitext(output_file)[0])
+        # Write the read names to the file
+        with open(text_file, 'w') as text:
+            text.write('\n'.join(query_set))
+        # Create a list to store all the reads for the individual subject:gene match:direction combinations
+        read_list = list()
+        for read in query_set:
+            read_list.append(record_dict[read])
+        # Use SeqIO to output the reads to the output file
+        with open(output_file, 'w') as output:
+            SeqIO.write(read_list, output, file_type)
+        return outdict
+
+    def overhang_bowtie_run(self):
+        """
+        Map the binned FASTQ reads against the appropriate target file
+        """
+        printtime('Performing reference mapping', self.start)
+        for subject, nested_dict in self.overhang_fastq_bins.items():
+            for direction, nested_gene_dict in nested_dict.items():
+                for gene, fastq in nested_gene_dict.items():
+                    # Set the name and create the folder to store the mapping outputs
+                    outpath = os.path.join(self.overhang_path, subject)
+                    sorted_bam = os.path.join(outpath, '{subject}_{gene}_{dir}_sorted.bam'
+                                              .format(subject=subject,
+                                                      gene=gene,
+                                                      dir=direction))
+                    # Populate the dictionary of subject: sorted BAM file name/path
+                    self.bamdict[subject] = sorted_bam
+                    # Bowtie2 command piped to samtools view to convert data to BAM format piped to samtools sort to
+                    # sort the BAM file
+                    map_command = 'bowtie2 -x {base} -U {fastq} --very-sensitive-local --local -p {threads} | ' \
+                                  'samtools view -@ {threads} -h -F 4 -bT {target} - | ' \
+                                  'samtools sort - -@ {threads} -o {sortedbam}'\
+                        .format(base=self.basedict[gene],
+                                fastq=fastq,
+                                threads=self.cpus,
+                                target=self.targetdict[gene],
+                                sortedbam=sorted_bam)
+                    if not os.path.isfile(sorted_bam):
+                        call(map_command, shell=True, stdout=self.devnull, stderr=self.devnull)
+                    index_command = 'samtools index {bamfile}'.format(bamfile=sorted_bam)
+                    if not os.path.isfile('{bamfile}.bai'.format(bamfile=sorted_bam)):
+                        call(index_command, shell=True, stdout=self.devnull, stderr=self.devnull)
 
     def __init__(self, args):
         """
@@ -452,6 +691,7 @@ class MinionPipeline(object):
         self.hdist = args.hdist
         self.minreadlength = args.readlength
         self.overhang_length = args.overhang
+        self.assemble_reads = args.assemble
         self.baitpath = os.path.join(self.path, 'bait')
         make_path(self.baitpath)
         self.blastpath = os.path.join(self.path, 'blast')
@@ -460,22 +700,21 @@ class MinionPipeline(object):
         make_path(self.outpath)
         self.sequencepath = os.path.join(self.path, 'sequences')
         make_path(self.sequencepath)
-        self.assemblypath = os.path.join(self.path, 'assemblies')
-        make_path(self.assemblypath)
+        if self.assemble_reads:
+            self.assemblypath = os.path.join(self.path, 'assemblies')
+            make_path(self.assemblypath)
         self.overhang_path = os.path.join(self.path, 'overhangs')
         make_path(self.overhang_path)
-        self.aligned_overhangs = os.path.join(self.path, 'aligned_overhangs')
-        make_path(self.aligned_overhangs)
+        self.bin_path = os.path.join(self.path, 'overhang_bins')
+        make_path(self.bin_path)
         self.target = os.path.join(args.targetfile)
         assert os.path.isfile(self.target), 'Cannot find the target file supplied in the arguments {}. Please ensure ' \
                                             'that the file name and path are correct'.format(self.target)
-        if os.path.isfile('{}_no_wheat.fasta'.format(os.path.splitext(self.target)[0])):
-            self.no_wheat = '{}_no_wheat.fasta'.format(os.path.splitext(self.target)[0])
-        else:
-            self.no_wheat = str()
+        self.wheat = os.path.join(os.path.dirname(self.target), 'genesofinterest_wheat.fasta')
         self.target_files = dict()
         # Remove the path and the file extension for the target file for use in BLASTing
         self.db = os.path.splitext(self.target)[0]
+        self.wheat_db = os.path.splitext(self.wheat)[0]
         self.filteredfastq = os.path.join(self.baitpath, 'filteredfastq.fastq')
         self.filteredfasta = os.path.join(self.baitpath, 'filteredfastq.fasta')
         self.report = os.path.join(self.blastpath, 'blast_report.csv')
@@ -489,8 +728,19 @@ class MinionPipeline(object):
         self.basedict = dict()
         self.bamdict = dict()
         self.leftrecords = dict()
+        self.leftfastqrecords = dict()
+        self.chimericleftrecords = dict()
         self.rightrecords = dict()
-        self.overhang_dict = dict()
+        self.rightfastqrecords = dict()
+        self.chimericrightrecords = dict()
+        self.overhang_fasta = dict()
+        self.overhang_fastq = dict()
+        self.overhang_fastq_bins = dict()
+        self.overhang_fasta_bins = dict()
+        self.chimeric_overhang_dict = dict()
+        self.blast_report_dict = dict()
+        self.overhang_blast_results = dict()
+        self.overhang_lists = dict()
         self.devnull = open(os.devnull, 'wb')
         self.cpus = multiprocessing.cpu_count()
         # Fields used for custom outfmt 6 BLAST output:
@@ -525,8 +775,19 @@ if __name__ == '__main__':
     parser.add_argument('-o', '--overhang',
                         default=100,
                         help='The minimum length a 5\' or 3\' overhang must be to be considered')
+    parser.add_argument('-a', '--assemble',
+                        action='store_true',
+                        help='Optionally assemble binned reads')
     arguments = parser.parse_args()
     arguments.startingtime = time()
     # Run the pipeline
     pipeline = MinionPipeline(arguments)
     pipeline.main()
+
+'''
+/home/bioinfo/Bioinformatics/180323/gwalk2_update
+-t
+/home/bioinfo/Bioinformatics/targets/genesofinterest.fasta
+-f
+/home/bioinfo/Bioinformatics/data/gwalk2_update/gwalk_combined_trimmed.fastq.gz
+'''

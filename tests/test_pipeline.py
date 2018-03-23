@@ -21,6 +21,9 @@ def variables():
     v.path = os.path.join(testpath, 'testdata')
     v.targetpath = os.path.join(v.path, 'targets')
     v.targetfile = os.path.join(v.targetpath, 'genesofinterest.fasta')
+    v.wheat = os.path.join(v.targetpath, 'genesofinterest_wheat.fasta')
+    v.db = os.path.splitext(v.targetfile)[0]
+    v.wheat_db = os.path.splitext(v.wheat)[0]
     v.fastq = os.path.join(v.path, 'testdata.fastq.gz')
     v.length = 50
     v.kmersize = 27
@@ -29,6 +32,7 @@ def variables():
     v.startingtime = time()
     v.scriptpath = scriptpath
     v.overhang = 1
+    v.assemble = True
     return v
 
 
@@ -57,7 +61,7 @@ def test_fastq_to_fasta(variables):
 
 
 def test_make_blastdb(variables):
-    method.make_blastdb()
+    method.make_blastdb(variables.targetfile, variables.db)
     assert os.path.isfile(os.path.join(variables.targetpath, 'genesofinterest.nhr'))
 
 
@@ -118,16 +122,31 @@ def test_samtools_index(variables):
 
 def test_extract_overhangs():
     method.extract_overhangs()
-    assert len(method.rightrecords['CTP2']) == 12
+    assert len(method.rightrecords['CTP2']) == 4
 
 
-def test_overhang_aligner(variables):
-    method.overhang_aligner()
-    assert os.path.isfile(os.path.join(variables.path, 'aligned_overhangs', 'CTP2_left_overhang_aligned.fasta'))
+def test_overhang_makedb(variables):
+    method.make_blastdb(variables.wheat, variables.wheat_db)
+    assert os.path.isfile(os.path.join(variables.targetpath, 'genesofinterest_wheat.nhr'))
+
+
+def test_blast_overhangs(variables):
+    method.blast_overhangs()
+    assert os.path.isfile(os.path.join(variables.path, 'overhangs', 'CTP2', 'left_blast_results.csv'))
+
+
+def test_parse_overhang_blast():
+    method.parse_overhang_blast()
+    assert '46c520b6-7af3-4df3-9688-d543b270bac8' in method.overhang_blast_results['CTP2']['left']['e35S']
+
+
+def test_output_overhang_results(variables):
+    method.output_overhang_results()
+    assert os.path.isfile(os.path.join(variables.path, 'bins', 'CTP2', 'CTP2_e35S_left.fasta'))
 
 
 def test_clean_folder(variables):
-    directories = ['assemblies', 'bait', 'blast', 'outputs', 'sequences']
+    directories = ['aligned_overhangs', 'assemblies', 'bait', 'blast', 'bins', 'outputs', 'overhangs', 'sequences']
     for directory in directories:
         shutil.rmtree(os.path.join(variables.path, directory))
 
