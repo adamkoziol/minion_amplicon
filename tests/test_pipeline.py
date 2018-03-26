@@ -52,11 +52,6 @@ def variable_update():
 
 def test_bait(variables):
     method.bait()
-    assert os.path.isfile(os.path.join(variables.path, 'bait', 'filteredfastq.fastq'))
-
-
-def test_fastq_to_fasta(variables):
-    method.fastq_to_fasta()
     assert os.path.isfile(os.path.join(variables.path, 'bait', 'filteredfastq.fasta'))
 
 

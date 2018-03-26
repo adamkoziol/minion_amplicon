@@ -28,7 +28,6 @@ class MinionPipeline(object):
             self.clump_reads()
         self.bait()
         self.reformat_reads()
-        self.fastq_to_fasta()
         self.make_blastdb(self.target, self.db)
         self.blast()
         self.blast_parser()
@@ -99,10 +98,10 @@ class MinionPipeline(object):
                     kmer=self.kmer,
                     hdist=self.hdist,
                     reference=self.target,
-                    filteredbaits=self.filteredfastq
+                    filteredbaits=self.filteredfasta
                     )
         # Run the system call if the baited FASTQ file hasn't already been created
-        if not os.path.isfile(self.filteredfastq):
+        if not os.path.isfile(self.filteredfasta):
             call(bait_command, shell=True, stdout=self.devnull, stderr=self.devnull)
 
     def reformat_reads(self):
@@ -110,23 +109,12 @@ class MinionPipeline(object):
         Remove any reads below the user-inputted minimum read length
         """
         printtime('Filtering FASTQ reads below {} bp'.format(self.minreadlength), self.start)
-        # Create the system call to bbduk - use the user-supplied kmer length, and hdist values
-        filter_command = 'reformat.sh -ow=true -in={reads} -out={reads} -minlength={minlength} -zl=9'\
-            .format(reads=self.filteredfastq,
+        # Create the system call to reformat.sh - use the user-supplied minimum read length value
+        filter_command = 'reformat.sh -ow=true -in={reads} -out={reads} -minlength={minlength}'\
+            .format(reads=self.filteredfasta,
                     minlength=self.minreadlength)
         # Run the system call
         call(filter_command, shell=True, stdout=self.devnull, stderr=self.devnull)
-
-    def fastq_to_fasta(self):
-        """
-        Convert baited FASTQ reads to FASTA format for future BLAST analyses
-        """
-        printtime('Converting FASTQ to FASTA', self.start)
-        convert_command = 'fastq_to_fasta -i {filteredbaits} -o {fastareads}'\
-            .format(filteredbaits=self.filteredfastq,
-                    fastareads=self.filteredfasta)
-        if not os.path.isfile(self.filteredfasta):
-            call(convert_command, shell=True, stdout=self.devnull, stderr=self.devnull)
 
     def make_blastdb(self, target, db):
         """
@@ -658,9 +646,11 @@ class MinionPipeline(object):
                                 threads=self.cpus,
                                 target=self.targetdict[gene],
                                 sortedbam=sorted_bam)
+                    # Perform reference mapping
                     if not os.path.isfile(sorted_bam):
                         call(map_command, shell=True, stdout=self.devnull, stderr=self.devnull)
                     index_command = 'samtools index {bamfile}'.format(bamfile=sorted_bam)
+                    # Index mapped file
                     if not os.path.isfile('{bamfile}.bai'.format(bamfile=sorted_bam)):
                         call(index_command, shell=True, stdout=self.devnull, stderr=self.devnull)
 
@@ -715,7 +705,6 @@ class MinionPipeline(object):
         # Remove the path and the file extension for the target file for use in BLASTing
         self.db = os.path.splitext(self.target)[0]
         self.wheat_db = os.path.splitext(self.wheat)[0]
-        self.filteredfastq = os.path.join(self.baitpath, 'filteredfastq.fastq')
         self.filteredfasta = os.path.join(self.baitpath, 'filteredfastq.fasta')
         self.report = os.path.join(self.blastpath, 'blast_report.csv')
         self.resultdict = dict()
