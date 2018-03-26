@@ -101,7 +101,7 @@ def test_target_creation(variables):
 
 
 def test_bowtie_build(variables):
-    method.bowtie_build(variables.targetfile)
+    method.bowtie_build()
     assert os.path.isfile(os.path.join(variables.targetpath, 'CTP2.1.bt2'))
 
 

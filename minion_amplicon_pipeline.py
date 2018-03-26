@@ -38,7 +38,7 @@ class MinionPipeline(object):
         if self.assemble_reads:
             self.assemble()
         self.target_creation(self.target)
-        self.bowtie_build(self.target)
+        self.bowtie_build()
         self.bowtie_run()
         self.samtools_index()
         self.extract_overhangs()
@@ -48,7 +48,7 @@ class MinionPipeline(object):
         db = self.wheat_db if os.path.isfile(self.wheat) else self.db
         self.make_blastdb(target, db)
         self.target_creation(target)
-        self.bowtie_build(target)
+        self.bowtie_build()
         self.blast_overhangs(db)
         self.parse_overhang_blast()
         self.output_overhang_results()
@@ -273,6 +273,7 @@ class MinionPipeline(object):
 
     def target_creation(self, fasta):
         """
+        :param fasta: Name and path of the Multi-FASTA target file
         Split the multi-FASTA target file into FASTA files for each target in the file
         """
         # Create a generator of all the FASTA records
@@ -290,7 +291,7 @@ class MinionPipeline(object):
                 with open(target_file, 'w') as target:
                     SeqIO.write(record, target, 'fasta')
 
-    def bowtie_build(self, fasta_file):
+    def bowtie_build(self):
         """
         Use bowtie2-build to index each target file
         """
@@ -502,6 +503,7 @@ class MinionPipeline(object):
 
     def blast_overhangs(self, db):
         """
+        :param db: Name and path of the database file to use
         BLAST overhangs against the original target file to determine the neighbours of each gene
         """
         printtime('Performing BLAST analyses', self.start)
@@ -592,12 +594,20 @@ class MinionPipeline(object):
 
     def output_file(self, subject, direction, dictionary, gene, query_set, file_type, outdict):
         """
-
+        Output the reads that match the overhangs of the provided gene.
+        :param subject: name of the gene of interest present in the initial match
+        :param direction: direction of the overhang (left or right)
+        :param dictionary: the dictionary to use for retrieving reads files (different dictionaries for FASTA/FASTQ)
+        :param gene: the gene present in the overhang
+        :param query_set: set of reads matching the gene
+        :param file_type: FASTA or FASTQ format
+        :param outdict: dictionary to use to store the name and path of the output file
+        :return: dictionary of subject: direction: gene: output file
         """
-        # Determine which overhang sequence-containing FASTA file to use depending on the direction.
+        # Determine which overhang sequence-containing FASTA/FASTQ file to use depending on the direction.
         fastafile = dictionary[subject][0] if direction in dictionary[subject][0] \
             else dictionary[subject][1]
-        # Load the records from the FASTA file to a dictionary
+        # Load the records from the FASTA/FASTQ file to a dictionary
         record_dict = SeqIO.to_dict(SeqIO.parse(fastafile, file_type))
         # Set the name of the output path for the BLAST-binned reads
         output_path = os.path.join(self.bin_path, subject)
@@ -608,6 +618,7 @@ class MinionPipeline(object):
                                            gene=gene,
                                            dir=direction,
                                            filetype=file_type))
+        # Populate the output dictionary with the file name
         outdict[subject][direction][gene] = output_file
         # Create a text file to store only the read names
         text_file = '{}.txt'.format(os.path.splitext(output_file)[0])
@@ -662,12 +673,13 @@ class MinionPipeline(object):
         Initialises the variables required for this class
         :param args: list of arguments passed to the script
         """
-        # Define variables from the arguments - there may be a more streamlined way to do this
+        # Define variables from the arguments
         self.args = args
         self.path = os.path.join(args.path)
         make_path(self.path)
         self.length = args.length
         self.start = args.startingtime
+        # Determine whether a FASTQ file, or a folder containing raw FASTQ files was provided
         if os.path.isdir(args.fastq):
             self.trim = True
             self.fastq_path = os.path.join(args.fastq)
