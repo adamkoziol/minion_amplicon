@@ -101,12 +101,12 @@ def test_assemble(variables):
 
 
 def test_target_creation(variables):
-    method.target_creation()
+    method.target_creation(variables.targetfile)
     assert os.path.isfile(os.path.join(variables.path, 'targets', 'CTP2.tfa'))
 
 
 def test_bowtie_build(variables):
-    method.bowtie_build()
+    method.bowtie_build(variables.targetfile)
     assert os.path.isfile(os.path.join(variables.targetpath, 'CTP2.1.bt2'))
 
 
@@ -132,7 +132,7 @@ def test_overhang_makedb(variables):
 
 def test_blast_overhangs(variables):
     method.blast_overhangs()
-    assert os.path.isfile(os.path.join(variables.path, 'overhangs', 'CTP2', 'left_blast_results.csv'))
+    assert os.path.isfile(os.path.join(variables.path, 'overhangs', 'CTP2', 'CTP2_left_blast_results.csv'))
 
 
 def test_parse_overhang_blast():
@@ -142,11 +142,16 @@ def test_parse_overhang_blast():
 
 def test_output_overhang_results(variables):
     method.output_overhang_results()
-    assert os.path.isfile(os.path.join(variables.path, 'bins', 'CTP2', 'CTP2_e35S_left.fasta'))
+    assert os.path.isfile(os.path.join(variables.path, 'overhang_bins', 'CTP2', 'CTP2_e35S_left.fasta'))
+
+
+def test_overhang_bowtie_run(variables):
+    method.overhang_bowtie_run()
+    assert os.path.isfile(os.path.join(variables.path, 'overhangs', 'CTP2', 'CTP2_e35S_left_sorted.bam'))
 
 
 def test_clean_folder(variables):
-    directories = ['aligned_overhangs', 'assemblies', 'bait', 'blast', 'bins', 'outputs', 'overhangs', 'sequences']
+    directories = ['assemblies', 'bait', 'blast', 'outputs', 'overhangs', 'overhang_bins', 'sequences']
     for directory in directories:
         shutil.rmtree(os.path.join(variables.path, directory))
 
