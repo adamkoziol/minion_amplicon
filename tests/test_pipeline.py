@@ -126,7 +126,7 @@ def test_overhang_makedb(variables):
 
 
 def test_blast_overhangs(variables):
-    method.blast_overhangs()
+    method.blast_overhangs(variables.wheat_db)
     assert os.path.isfile(os.path.join(variables.path, 'overhangs', 'CTP2', 'CTP2_left_blast_results.csv'))
 
 

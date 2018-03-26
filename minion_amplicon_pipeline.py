@@ -42,10 +42,14 @@ class MinionPipeline(object):
         self.bowtie_run()
         self.samtools_index()
         self.extract_overhangs()
-        self.make_blastdb(self.wheat, self.wheat_db)
-        self.target_creation(self.wheat)
-        self.bowtie_build(self.wheat)
-        self.blast_overhangs()
+        # If the target file with wheat sequences exists, use this file for the subsequent analyses. Otherwise use
+        # the original targets file
+        target = self.wheat if os.path.isfile(self.wheat) else self.target
+        db = self.wheat_db if os.path.isfile(self.wheat) else self.db
+        self.make_blastdb(target, db)
+        self.target_creation(target)
+        self.bowtie_build(target)
+        self.blast_overhangs(db)
         self.parse_overhang_blast()
         self.output_overhang_results()
         self.overhang_bowtie_run()
@@ -496,7 +500,7 @@ class MinionPipeline(object):
                     with open(chimeric_right_file, 'w') as right:
                         SeqIO.write(self.chimericrightrecords[subject], right, 'fasta')
 
-    def blast_overhangs(self):
+    def blast_overhangs(self, db):
         """
         BLAST overhangs against the original target file to determine the neighbours of each gene
         """
@@ -524,7 +528,7 @@ class MinionPipeline(object):
                 # targets are combined into one database, this is to ensure that all potential alignments are
                 # reported. Also note the custom outfmt: the doubled quotes are necessary to get it work
                 blastn = NcbiblastnCommandline(query=overhang_file,
-                                               db=self.wheat_db,
+                                               db=db,
                                                num_alignments=1000000,
                                                num_threads=self.cpus,
                                                outfmt="'6 qseqid sseqid positive mismatch gaps "
@@ -589,7 +593,6 @@ class MinionPipeline(object):
     def output_file(self, subject, direction, dictionary, gene, query_set, file_type, outdict):
         """
 
-        :return:
         """
         # Determine which overhang sequence-containing FASTA file to use depending on the direction.
         fastafile = dictionary[subject][0] if direction in dictionary[subject][0] \
