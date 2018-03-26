@@ -159,7 +159,8 @@ wheat and the cassette.</p>
 <p>There are a number of optional parameters than can be supplied to the minion_amplicon_pipeline.py script</p>
 <pre><code>usage: minion_amplicon_pipeline.py [-h] [-l LENGTH] -t TARGETFILE
                                    [-k KMERSIZE] [--hdist HDIST]
-                                   [-r READLENGTH] [-f FASTQFILE]
+                                   [-r READLENGTH] [-f FASTQ] [-o OVERHANG]
+                                   [-a]
                                    path
 
 Pipeline for transgene analyses
@@ -169,18 +170,21 @@ positional arguments:
 
 optional arguments:
   -h, --help            show this help message and exit
-  -l LENGTH, --length LENGTH
+  -l, --length LENGTH
                         Minimum length of match. Default is 50
-  -t TARGETFILE, --targetfile TARGETFILE
+  -t, --targetfile TARGETFILE
                         Name and path of multi-FASTA file of targets
-  -k KMERSIZE, --kmersize KMERSIZE
+  -k, --kmersize KMERSIZE
                         Size of kmer to use when baiting reads against targets
-  --hdist HDIST         Number of mismatches to allow for baiting. Default is
-                        2.
-  -r READLENGTH, --readlength READLENGTH
+  --hdist HDIST         Number of mismatches to allow for baiting. Default is 2.
+  -r, --readlength READLENGTH
                         Minimum read length for canu
-  -f FASTQFILE, --fastqfile FASTQFILE
-                        Name and path of FASTQ file to process
+  -f, --fastq FASTQ
+                        Supply either the name and path of FASTQ file to process, or the path 
+                        of raw FASTQ files to combine and trim prior to processing
+  -o, --overhang OVERHANG
+                        The minimum length a 5' or 3' overhang must be to be considered
+  -a, --assemble        Optionally assemble binned reads
 </code></pre>
               
             </div>
