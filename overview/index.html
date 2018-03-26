@@ -137,7 +137,10 @@
 <p>5' and 3' overhangs for every target are extracted, concatenated to the reference sequence using pysam v0.13</p>
 </li>
 <li>
-<p>Overhang sequences are aligned with ClustalOmega v1.2.4</p>
+<p>Overhang sequences are aligned against the targets using blastn v2.2.31+</p>
+</li>
+<li>
+<p>Reads that match one or more targets are binned and reference mapped to each target using bowtie2 v.2.3.4</p>
 </li>
 </ul></div>
         </div>
