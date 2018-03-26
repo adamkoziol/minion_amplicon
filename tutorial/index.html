@@ -136,11 +136,20 @@
 <li>supply the name and path of the FASTQ file</li>
 </ul>
 <h4 id="target-file">Target file</h4>
-<p>The multi-FASTA target file must have the name of the target as the header e.g.</p>
-<p>>NOS3</p>
-<p>CCCGA......</p>
-<p>>e35S</p>
-<p>GGTCC.....</p>
+<p>The multi-FASTA target file must have the name of the target as the header e.g.:</p>
+<pre><code>&gt;NOS3
+CCCGA......
+
+&gt;e35S
+GGTCC.....
+</code></pre>
+
+<p>Additionally, for best results you should provide a second file in the same folder as the target file. 
+This file must be named 'genesofinterest_wheat.fasta'. It must have the same FASTA sequences as the original target file, as well as
+any wheat sequences you wish to find. Including the wheat sequences in the original
+target file causes a very large number of reads with only wheat sequence to be baited and analysed. This is not desired.</p>
+<p>If you do not provide this file, the pipeline will still work, however, it will be harder to find any junctions between
+wheat and the cassette.</p>
 <h4 id="the-following-command-will-run-the-pipeline-on-the-supplied-sequences-with-default-parameters">The following command will run the pipeline on the supplied sequences with default parameters</h4>
 <pre><code>minion_amplicon_pipeline.py /path/to/outputfolder -f /path/to/sequences -t /path/to/targets/targets.fasta
 
