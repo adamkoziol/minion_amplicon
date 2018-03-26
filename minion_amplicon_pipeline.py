@@ -762,7 +762,7 @@ if __name__ == '__main__':
                         default=500,
                         help='Minimum read length for canu')
     parser.add_argument('-f', '--fastq',
-                        help='Supply either the mame and path of FASTQ file to process, or the path of raw FASTQ files '
+                        help='Supply either the name and path of FASTQ file to process, or the path of raw FASTQ files '
                              'to combine and trim prior to the rest of the analyses')
     parser.add_argument('-o', '--overhang',
                         default=100,
