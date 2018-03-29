@@ -61,7 +61,7 @@ def test_make_blastdb(variables):
 
 
 def test_blast(variables):
-    method.blast()
+    method.blast(variables.db)
     assert os.path.isfile(os.path.join(variables.path, 'blast', 'blast_report.csv'))
 
 
@@ -72,12 +72,12 @@ def test_blast_parser():
 
 def test_populate_unique():
     method.populate_unique()
-    assert method.read_dict['173eaa32-64e2-40ad-9f10-849e9e3b8a2a'] == 1
+    assert method.read_dict['173eaa32-64e2-40ad-9f10-849e9e3b8a2a'] == 2
 
 
 def test_find_unique():
     method.find_unique()
-    assert len(method.unique_dict['e35S']) == 2
+    assert len(method.unique_dict['e35S']) == 1
 
 
 def test_create_lists(variables):

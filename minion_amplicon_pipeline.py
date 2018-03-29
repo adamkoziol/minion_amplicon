@@ -29,7 +29,7 @@ class MinionPipeline(object):
         self.bait()
         self.reformat_reads()
         self.make_blastdb(self.target, self.db)
-        self.blast()
+        self.blast(self.db)
         self.blast_parser()
         self.populate_unique()
         self.find_unique()
@@ -122,9 +122,9 @@ class MinionPipeline(object):
 
     def make_blastdb(self, target, db):
         """
+        :param target: FASTA target file
+        :param db: Database name to output
         Create the BLAST database using the combined target file
-        :param target:
-        :param db:
         """
         printtime('Creating BLAST databases', self.start)
         # Create a variable to store the name of one of the database files
@@ -135,8 +135,9 @@ class MinionPipeline(object):
                         reference=db)
             call(makedb_command, shell=True, stdout=self.devnull, stderr=self.devnull)
 
-    def blast(self):
+    def blast(self, db):
         """
+        :param db: Name and path of the database file to use
         Run BLAST analyses between the FASTA-formatted reads and the target database
         """
         printtime('Performing BLAST analyses', self.start)
@@ -152,11 +153,13 @@ class MinionPipeline(object):
         # Due to the fact that all the targets are combined into one database, this is to ensure that all potential
         # alignments are reported. Also note the custom outfmt: the doubled quotes are necessary to get it work
         blastn = NcbiblastnCommandline(query=self.filteredfasta,
-                                       db=self.db,
+                                       db=db,
+                                       dust='no',
+                                       soft_masking=False,
                                        num_alignments=1000000,
                                        num_threads=self.cpus,
                                        outfmt="'6 qseqid sseqid positive mismatch gaps "
-                                              "evalue bitscore slen length qstart qend sstart send'",
+                                              "evalue bitscore qlen slen length qstart qend sstart send'",
                                        out=self.report)
         # Only run blast if the report doesn't exist
         if not os.path.isfile(self.report):
@@ -531,10 +534,12 @@ class MinionPipeline(object):
                 # reported. Also note the custom outfmt: the doubled quotes are necessary to get it work
                 blastn = NcbiblastnCommandline(query=overhang_file,
                                                db=db,
+                                               dust='no',
+                                               soft_masking=False,
                                                num_alignments=1000000,
                                                num_threads=self.cpus,
                                                outfmt="'6 qseqid sseqid positive mismatch gaps "
-                                                      "evalue bitscore slen length qstart qend sstart send'",
+                                                      "evalue bitscore qlen slen length qstart qend sstart send'",
                                                out=report)
                 # Only run blast if the report doesn't exist
                 if not os.path.isfile(report):
@@ -749,7 +754,7 @@ class MinionPipeline(object):
         self.cpus = multiprocessing.cpu_count()
         # Fields used for custom outfmt 6 BLAST output:
         self.fieldnames = ['query_id', 'subject_id', 'positives', 'mismatches', 'gaps',
-                           'evalue', 'bit_score', 'subject_length', 'alignment_length',
+                           'evalue', 'bit_score', 'query_length', 'subject_length', 'alignment_length',
                            'query_start', 'query_end', 'subject_start', 'subject_end']
 
 # If the script is called from the command line, then call the argument parser
