@@ -54,7 +54,7 @@ py==1.5.2
 pycparser==2.18
 pycurl==7.43.0
 Pygments==2.2.0
-pyOpenSSL==17.4.0
+pyopenssl==17.5.0
 pysam==0.13
 PySocks==1.6.8
 pytest==3.4.1
